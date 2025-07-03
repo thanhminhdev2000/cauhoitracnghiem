@@ -1,27 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import './App.css';
+import React, { useState } from "react";
+import "./App.css";
+import type { Question, SelectedAnswer } from "./type";
+import { fullQuestions } from "./questions";
 
-// Định nghĩa kiểu dữ liệu cho câu hỏi
-interface Question {
-  question: string;
-  answers: string[];
-  result: string;
-}
+const shuffleArray = <T,>(array: T[]): T[] => {
+  return [...array].sort(() => Math.random() - 0.5);
+};
 
-interface SelectedAnswer {
-  question: string;
-  selectedAnswer: string;
-}
-
-// Component Quiz nhận vào các props question và answers từ App
 const Quiz: React.FC<{
+  index: number;
   question: string;
   answers: string[];
   onSelectAnswer: (answer: string) => void;
-}> = ({ question, answers, onSelectAnswer }) => {
+}> = ({ index, question, answers, onSelectAnswer }) => {
   return (
     <div className="quiz">
-      <h2>{question}</h2>
+      <h2>
+        Câu {index} : {question}
+      </h2>
       <div className="answers">
         {answers.map((answer, index) => (
           <button
@@ -38,81 +34,116 @@ const Quiz: React.FC<{
 };
 
 const App: React.FC = () => {
-  const [questions, setQuestions] = useState<Question[]>([
-  {
-    "question": "Hôm nay ăn gì?",
-    "answers": [
-      "Mì tôm", "Đậu phông", "Mắm", "Cá"
-    ],
-    "result": "Mì tôm"
-  },
-  {
-    "question": "Hôm nay thế nào?",
-    "answers": [
-      "Buồn", "Vui", "Chán", "Ngủ"
-    ],
-    "result": "Ngủ"
-  },
-  {
-    "question": "Hôm nay ăn gì?",
-    "answers": [
-      "Mì tôm", "Đậu phông", "Mắm", "Cá"
-    ],
-    "result": "Mì tôm"
-  }
-]
+  const [numQuestions, setNumQuestions] = useState<number>(1);
+  const [quizStarted, setQuizStarted] = useState<boolean>(false);
+  const [shuffledQuestions, setShuffledQuestions] = useState<Question[]>([]);
+  const [showAnswer, setShowAnswer] = useState<boolean>(false);
+  const [correctCount, setCorrectCount] = useState<number>(0);
 
-);
+  const [questions] = useState<Question[]>(fullQuestions);
+
   const [selectedAnswers, setSelectedAnswers] = useState<SelectedAnswer[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
 
-  // Tải dữ liệu câu hỏi từ file JSON hoặc API
-  useEffect(() => {
-    fetch('./questions.json') // Thay thế bằng API nếu cần
-      .then(response => response.json())
-      .then((data: Question[]) => setQuestions(data));
-  }, []);
-
-  console.log({questions})
-
   const handleSelectAnswer = (answer: string) => {
+    const currentQ = shuffledQuestions[currentQuestionIndex];
+
+    // Kiểm tra đúng/sai
+    if (answer === currentQ.result) {
+      setCorrectCount((prev) => prev + 1);
+    }
+
     setSelectedAnswers([
       ...selectedAnswers,
       {
-        question: questions[currentQuestionIndex].question,
+        question: currentQ.question,
         selectedAnswer: answer,
       },
     ]);
 
-    // Chuyển sang câu hỏi tiếp theo
-    if (currentQuestionIndex < questions.length - 1) {
+    // Chuyển sang câu tiếp theo
+    if (currentQuestionIndex < shuffledQuestions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
+      setShowAnswer(false);
     } else {
-      alert("Bạn đã hoàn thành bài kiểm tra!");
+      alert(`✅ Bạn trả lời đúng ${correctCount} câu!`);
+      setQuizStarted(false);
     }
   };
 
-  // if (questions.length === 0) return <div>Loading...</div>;
-
-  const currentQuestion = questions[currentQuestionIndex];
+  const currentQuestion = shuffledQuestions[currentQuestionIndex];
 
   return (
     <div className="App">
-      <Quiz
-        question={currentQuestion.question}
-        answers={currentQuestion.answers}
-        onSelectAnswer={handleSelectAnswer}
-      />
-      <div className="selected-answers">
-        <h3>Câu trả lời của bạn:</h3>
-        <ul>
-          {selectedAnswers.map((answer, index) => (
-            <li key={index}>
-              <strong>{answer.question}: </strong> {answer.selectedAnswer}
-            </li>
-          ))}
-        </ul>
-      </div>
+      {!quizStarted ? (
+        <div className="start-screen">
+          <h2>Chọn số lượng câu hỏi muốn làm:</h2>
+          <input
+            type="number"
+            min={1}
+            max={questions.length}
+            value={numQuestions}
+            onChange={(e) => setNumQuestions(Number(e.target.value))}
+          />
+          <button
+            onClick={() => {
+              const shuffled = shuffleArray(questions).slice(0, numQuestions);
+              setShuffledQuestions(shuffled);
+              setQuizStarted(true);
+              setCurrentQuestionIndex(0);
+              setSelectedAnswers([]);
+            }}
+            disabled={numQuestions < 1 || numQuestions > questions.length}
+          >
+            Bắt đầu
+          </button>
+        </div>
+      ) : (
+        <>
+          <Quiz
+            index={currentQuestionIndex + 1}
+            question={currentQuestion.question}
+            answers={currentQuestion.answers}
+            onSelectAnswer={handleSelectAnswer}
+          />
+
+          <div className="quiz-controls">
+            <button
+              onClick={() => {
+                if (currentQuestionIndex > 0) {
+                  setCurrentQuestionIndex(currentQuestionIndex - 1);
+                  setShowAnswer(false);
+                }
+              }}
+              disabled={currentQuestionIndex === 0}
+            >
+              Quay lại
+            </button>
+
+            <button onClick={() => setShowAnswer(!showAnswer)}>
+              {showAnswer ? "Ẩn đáp án" : "Hiện đáp án đúng"}
+            </button>
+
+            <button
+              onClick={() => {
+                if (currentQuestionIndex < shuffledQuestions.length - 1) {
+                  setCurrentQuestionIndex(currentQuestionIndex + 1);
+                  setShowAnswer(false);
+                }
+              }}
+              disabled={currentQuestionIndex === shuffledQuestions.length - 1}
+            >
+              Tiếp theo
+            </button>
+          </div>
+
+          {showAnswer && (
+            <div className="correct-answer">
+              ✅ Đáp án đúng: <strong>{currentQuestion.result}</strong>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
